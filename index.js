@@ -21,7 +21,7 @@ if (fs.existsSync(keyFile)) {
 }
 
 webpush.setVapidDetails(
-  'mailto:you@example.com', // Change to your email
+  'mailto:teranxd11@gmail.com', // Change to your email
   vapidKeys.publicKey,
   vapidKeys.privateKey
 );
