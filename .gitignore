@@ -1,0 +1,47 @@
+# Helalink Backend
+
+Backend for scheduled web push notifications.
+
+## Endpoints
+
+- `GET /vapidPublic`: Returns the public VAPID key for Push API.
+- `POST /subscribe`: Receives a push subscription object from the frontend.
+- `POST /notify`: Triggers a manual notification to all subscribers (for testing).
+
+## Scheduled Notifications
+
+A notification is sent to all subscribers daily at 9AM UTC.
+
+## Setup
+
+1. `npm install`
+2. `npm start`
+
+The backend will automatically generate and reuse VAPID keys (saved in `vapid-keys.json`).
+
+> **Do not share the private VAPID key. The public key is safe for the frontend.**
+
+## Deploy
+
+Deploy as a Node.js web service (e.g., Render, Heroku).
+
+## Frontend Integration
+
+- Fetch `/vapidPublic` to get the public key.
+- Register a Service Worker.
+- Subscribe and send subscription to `/subscribe`.  const payload = JSON.stringify({
+    title: "Daily Notification",
+    body: "This is your scheduled notification!"
+  });
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(sub, payload);
+    } catch (err) {
+      // Optionally log errors or remove invalid subscriptions
+      console.error('Push error:', err.message);
+    }
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server started on ${PORT}`));
