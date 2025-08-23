@@ -1,102 +1,82 @@
-import express from "express";
-import bodyParser from "body-parser";
-import webpush from "web-push";
-import dotenv from "dotenv";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-
-dotenv.config();
+const express = require('express');
+const webpush = require('web-push');
+const cron = require('node-cron');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const fs = require('fs');
 
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 
-const publicVapidKey = process.env.PUBLIC_VAPID;
-const privateVapidKey = process.env.PRIVATE_VAPID;
+// --- VAPID key generation and loading ---
+const keyFile = './vapid-keys.json';
+let vapidKeys;
+
+if (fs.existsSync(keyFile)) {
+  vapidKeys = JSON.parse(fs.readFileSync(keyFile));
+} else {
+  vapidKeys = webpush.generateVAPIDKeys();
+  fs.writeFileSync(keyFile, JSON.stringify(vapidKeys));
+}
 
 webpush.setVapidDetails(
-  "mailto:youremail@example.com",
-  publicVapidKey,
-  privateVapidKey
+  'mailto:you@example.com', // Change to your email
+  vapidKeys.publicKey,
+  vapidKeys.privateKey
 );
 
-// Open SQLite database
-let db;
-(async () => {
-  db = await open({
-    filename: "./subscriptions.db",
-    driver: sqlite3.Database
-  });
+// --- Expose public key endpoint for frontend ---
+app.get('/vapidPublicKey', (req, res) => {
+  res.send(vapidKeys.publicKey);
+});
 
-  await db.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    endpoint TEXT UNIQUE,
-    keys TEXT
-  )`);
-})();
+// --- In-memory store for subscriptions ---
+const subscriptions = [];
 
-// Subscribe route
-app.post("/subscribe", async (req, res) => {
+// --- Endpoint to receive push subscriptions from frontend ---
+app.post('/subscribe', (req, res) => {
   const subscription = req.body;
-
-  try {
-    await db.run(
-      "INSERT OR IGNORE INTO subscriptions (endpoint, keys) VALUES (?, ?)",
-      subscription.endpoint,
-      JSON.stringify(subscription.keys)
-    );
-    res.status(201).json({ message: "Subscribed!" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to subscribe" });
+  // Avoid duplicates (simple check)
+  if (!subscriptions.find(sub => JSON.stringify(sub) === JSON.stringify(subscription))) {
+    subscriptions.push(subscription);
   }
+  res.status(201).json({ message: 'Subscribed!' });
 });
 
-// Unsubscribe route
-app.post("/unsubscribe", async (req, res) => {
-  const { endpoint } = req.body;
-
-  try {
-    await db.run("DELETE FROM subscriptions WHERE endpoint = ?", endpoint);
-    res.json({ message: "Unsubscribed!" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to unsubscribe" });
-  }
-});
-
-// Send notifications
-app.get("/send", async (req, res) => {
-  try {
-    const rows = await db.all("SELECT * FROM subscriptions");
-
-    const payload = JSON.stringify({
-      title: "🚀 Helalink Reminder",
-      body: "Helalink is launching soon — don’t miss your bonus!",
-    });
-
-    let successCount = 0;
-
-    for (const row of rows) {
-      const subscription = {
-        endpoint: row.endpoint,
-        keys: JSON.parse(row.keys)
-      };
-
-      try {
-        await webpush.sendNotification(subscription, payload);
-        successCount++;
-      } catch (err) {
-        console.error("Failed to send, removing:", row.endpoint);
-        await db.run("DELETE FROM subscriptions WHERE endpoint = ?", row.endpoint);
-      }
+// --- Test endpoint to send notifications immediately ---
+app.post('/notify', async (req, res) => {
+  const payload = JSON.stringify({
+    title: "Manual Notification",
+    body: "This is a manual test notification!"
+  });
+  const results = [];
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(sub, payload);
+      results.push({ success: true });
+    } catch (err) {
+      results.push({ success: false, error: err.message });
     }
+  }
+  res.json(results);
+});
 
-    res.json({ success: true, sent: successCount });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to send notifications" });
+// --- Scheduled notification every day at 9AM UTC ---
+cron.schedule('0 9 * * *', async () => {
+  const payload = JSON.stringify({
+    title: "Daily Notification",
+    body: "This is your scheduled notification!"
+  });
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(sub, payload);
+    } catch (err) {
+      // Optionally log errors or remove invalid subscriptions
+      console.error('Push error:', err.message);
+    }
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server started on ${PORT}`));
