@@ -66,7 +66,7 @@ app.post('/notify', async (req, res) => {
 cron.schedule('0 9 * * *', async () => {
   const payload = JSON.stringify({
     title: "Daily Notification",
-    body: "This is your scheduled notification!"
+    body: "HELALINK 🔥 LAUNCHING ON 13 SEPTEMBER💪,REGISTRATION FEE IS 550 🎊 AND MAKE 2K DAILY 🥳!"
   });
   for (const sub of subscriptions) {
     try {
