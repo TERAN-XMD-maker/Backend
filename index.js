@@ -92,7 +92,7 @@ function buildMessageVariant(slot) {
     };
   } else if (slot === 'afternoon') {
     return {
-      title: 'Afternoon Reminder — Don’t Miss Out',
+      title: 'Afternoon Reminder — Don't Miss Out',
       body: `Afternoon! HELALINK launches 13 Sep. REG FEE: 550. ${countdownText}. Join the movement and prepare to earn!`
     };
   } else if (slot === 'evening') {
